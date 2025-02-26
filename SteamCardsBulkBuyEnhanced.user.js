@@ -84,7 +84,7 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
 
     // If Steam Sale badge, set to current level + 1
     var badge_title = $('.badge_title').text();
-    if (badge_title.match(/\s*(Winter|Summer) Sale \d{4} Badge\s*/)) {
+    if (badge_title.match(/\s*(Winter|Summer) Sale \d+ Badge\s*/)) {
         g_SaleBadge = true;
         g_BadgeMaxLevel = g_BadgeLevel + 1;
 
@@ -98,7 +98,7 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
     if (document.documentURI.includes('border=1')) {
         g_BadgeMaxLevel = 1;
         // If Steam Sale badge, set to current level + 1
-        if (badge_title.match(/\s*(Winter|Summer) Sale \d{4} Foil Badge\s*/)) {
+        if (badge_title.match(/\s*(Winter|Summer) Sale \d+ Foil Badge\s*/)) {
             g_SaleBadge = true;
             g_BadgeMaxLevel = g_BadgeLevel + 1;
             // @todo Detect sale ends
