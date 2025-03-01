@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name            Steam Trading Cards Bulk Buyer (Enhanced)
-// @version         1.1.1
+// @version         1.1.3
 // @description     A free userscript to purchase remaining cards needed for a maximum level badge in bulk
 // @author          HoangVN
 //
@@ -46,7 +46,7 @@ var g_HistoryRangeDays = 7;
 // Initialize default badge settings
 var g_BadgeLevel = 0;
 var g_BadgeMaxLevel = 5;
-var g_SaleBadge = false;
+var g_IsSaleBadge = false;
 
 // Messages
 var g_Messages = {
@@ -63,6 +63,12 @@ var g_Messages = {
     status_checking: 'Checking order status...',
     status_canceling: 'Canceling active order...',
 };
+
+// App IDs for Steam sale badge
+// Should be updated for each sale
+var g_SaleBagdeIds = [
+    2861720, /* Winter Sale 2024 */              
+]
 
 // UI settings
 var TITLE = '<div class="badge_title_rule"/><div class="badge_title">' + g_Name + '</div><br/>';
@@ -81,31 +87,18 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
     if ($('.badge_info_unlocked').length) {
         g_BadgeLevel = parseInt($('meta[property="og:description"]').attr('content').match(/\d+/), 10);
     }
-
-    // If Steam Sale badge, set to current level + 1
-    var badge_title = $('.badge_title').text();
-    if (badge_title.match(/\s*(Winter|Summer) Sale \d+ Badge\s*/)) {
-        g_SaleBadge = true;
-        g_BadgeMaxLevel = g_BadgeLevel + 1;
-
-        // @todo Detect sale ends
-        // if ($('.salespend_card_drop_info').length) {
-        //     g_BadgeMaxLevel = g_BadgeLevel;
-        // }
-    }
-
+    
     // Set max level to 1 for a Foil badge
     if (document.documentURI.includes('border=1')) {
         g_BadgeMaxLevel = 1;
-        // If Steam Sale badge, set to current level + 1
-        if (badge_title.match(/\s*(Winter|Summer) Sale \d+ Foil Badge\s*/)) {
-            g_SaleBadge = true;
+    }
+    // Detect Steam Sale badge
+    let appId = document.documentURI.match(/gamecards\/(\d+)/)[1];
+    if($('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Badge\s*/) || 
+            $('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Foil Badge\s*/) ||
+            g_SaleBagdeIds.includes(parseInt(appId))) {
             g_BadgeMaxLevel = g_BadgeLevel + 1;
-            // @todo Detect sale ends
-            // if ($('.card_drop_info_header').length == 0) {
-            //     g_BadgeMaxLevel = g_BadgeLevel + 1;
-            // }
-        }
+            g_IsSaleBadge = true;
     }
 
     $('.badge_detail_tasks:first').append('<div style="margin: 10px"><div id="bb_panel" style="visibility: hidden; margin-top: 5px"/></div>');
@@ -133,11 +126,10 @@ function _bottomLayout(w) {
     return _total_label + _buy_now + _history_slider + _place_orders;
 }
 
-function _saleBadge(level) {
-    return '<div class="bb_cardsale" style="padding-bottom: 20px"><label>' +
-            '<span class="bb_cardsalename" style="padding-right: 10px; text-align: right; display: inline-block; font-weight: bold; font-size: 15px;">' +
-            'Steam Sale badge desired level</span><input id="bb_cardsalebox" type="number" min="1" value=' + level + 
-            ' style="width: 80px; height: 30px; font-size: 15px; font-weight: bold;"></div>';
+function _chooseNextLevel(level) {
+    return '<div class="gamecards_inventorylink">' + '<span class="bb_cardsalename" style="padding-right: 10px; font-size: 18px;">' +
+            'Your next level</span><input id="bb_cardsalebox" type="number" min="1" value=' + level + 
+            ' style="padding-left: 10px; width: 60px; height: 20px; font-size: 18px; width: 6ch;"></div></br>'
 }
 
 function updatePrices() {
@@ -161,9 +153,7 @@ function updatePrices() {
 
         if (PANEL.html().length == 0) {
             PANEL.append(TITLE);
-            if (g_SaleBadge) {
-                PANEL.append(_saleBadge(g_BadgeMaxLevel));
-            }
+            PANEL.append(_chooseNextLevel(g_BadgeMaxLevel));
         }
 
         var cardName = cardText.replace(/\t|\r?\n|\r/g, '');
@@ -292,12 +282,22 @@ function updatePrices() {
                                 $('#bb_historyrange').css('display', 'none');
                             }
 
-                            if (g_SaleBadge) {
-                                $('#bb_cardsalebox').change(function() {
-                                    g_BadgeMaxLevel = document.getElementById("bb_cardsalebox").value;
-                                    updatePrices();
-                                });
-                            }
+                            $('#bb_cardsalebox').change(function() {
+                                let level = document.getElementById("bb_cardsalebox").value;
+                                if (g_IsSaleBadge) {
+                                    if(level < (g_BadgeLevel + 1)) {
+                                        document.getElementById("bb_cardsalebox").value = g_BadgeMaxLevel;
+                                        return;
+                                    }
+                                } else {
+                                    if(level < (g_BadgeLevel + 1) || level > g_BadgeMaxLevel) {
+                                        document.getElementById("bb_cardsalebox").value = g_BadgeMaxLevel;
+                                        return;
+                                    }                                    
+                                }
+                                g_BadgeMaxLevel = level;
+                                updatePrices();
+                            });
 
                             $('#bb_changemode').change(function() {
                                 var total = 0;
