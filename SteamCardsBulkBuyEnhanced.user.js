@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name            Steam Trading Cards Bulk Buyer (Enhanced)
-// @version         1.1.3
+// @version         1.1.4
 // @description     A free userscript to purchase remaining cards needed for a maximum level badge in bulk
 // @author          HoangVN
 //
@@ -111,8 +111,7 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
 
 function _bottomLayout(w) {
     let _total_label = '<br/><b><span style="display: inline-block; width: ' + w + 'px;' +
-                    'padding-right: 10px; text-align: right">TOTAL</span><span id="bb_totalprice"/></b><br/>';
-
+                    'padding-right: 10px; text-align: right">TOTAL</span><span id="bb_totalprice"/><span id="bb_old_totalprice" style="padding-left: 10px;"/></b><br/>';
     let _history_slider = '<span id="bb_historyrange"><span style="padding-left: 30px; padding-right: 10px">' +
                     'History analyze range</span><input type="range" id="bb_rangeslider" style="vertical-align: middle; width: 30%"/>' +
                     '<span id="bb_slidervalue" style="padding-left: 10px"/></span><br/>';
@@ -127,7 +126,7 @@ function _bottomLayout(w) {
 }
 
 function _chooseNextLevel(level) {
-    return '<div class="gamecards_inventorylink">' + '<span class="bb_cardsalename" style="padding-right: 10px; font-size: 18px;">' +
+    return '<div class="gamecards_inventorylink">' + '<span class="bb_next_lvl" style="padding-right: 10px; font-size: 18px;">' +
             'Your next level</span><input id="bb_cardsalebox" type="number" min="1" value=' + level + 
             ' style="padding-left: 10px; width: 60px; height: 20px; font-size: 18px; width: 6ch;"></div></br>'
 }
@@ -135,6 +134,7 @@ function _chooseNextLevel(level) {
 function updatePrices() {
     PANEL.html('');
 
+    var old_total = 0;
     Array.prototype.slice.call($('.badge_card_set_card')).forEach(function(card) {
         card = $(card);
 
@@ -232,7 +232,7 @@ function updatePrices() {
                                 history.prices[i][1] *= 100;
                             }
                         }
-
+                        
                         row.data('hashname', hashName[1]);
                         row.data('histogram', histogram);
                         row.data('history', history);
@@ -240,11 +240,15 @@ function updatePrices() {
                         var price = getOptimumPrice(histogram, history, quantity);
                         row.data('price_total', price[0] * quantity);
 
+                        row.data('old_price', 0);
+
                         if (oldOrderID) {
                             let oldOrderData = _oldOrderData(html, countryCode[1]);
                             row.data('old_orderid', oldOrderID[1]);
                             row.data('old_orderdata', ' <span style="opacity: 0.5"><strike>' + 
                                 oldOrderData[0] + ' x ' + oldOrderData[1] + ' (' + priceToString(oldOrderData[2]) + ') order</strike></span>');
+                            old_total += oldOrderData[2];
+                            row.data('old_price', oldOrderData[1]);
                         }
 
                         setCardStatus(row, priceToString(price[0] * quantity - price[1], true) + g_StatusSeparator + 
@@ -252,7 +256,7 @@ function updatePrices() {
                         row.css('opacity', 1);
 
                         row.addClass('ready');
-
+                        
                         if ($('.bb_cardrow:not(.ready)').length === 0) {
                             let w = $('.bb_cardprice:first').offset().left - $('.bb_cardrow:first').offset().left - 10;
                             $('#bb_panel').append(_bottomLayout(w));
@@ -285,7 +289,7 @@ function updatePrices() {
                             $('#bb_cardsalebox').change(function() {
                                 let level = document.getElementById("bb_cardsalebox").value;
                                 if (g_IsSaleBadge) {
-                                    if(level < (g_BadgeLevel + 1)) {
+                                    if(level < g_BadgeMaxLevel) {
                                         document.getElementById("bb_cardsalebox").value = g_BadgeMaxLevel;
                                         return;
                                     }
@@ -330,6 +334,13 @@ function updatePrices() {
                                             continue;
                                         }
                                     }
+                                    // Current order is not highest order, increase price
+                                    if (price[2] == 'Highest buy order') {
+                                        if(card.data('old_price') !== (parseInt(price[0]) / 100).toFixed(2)) {
+                                            price[0] += 1;
+                                        }
+                                    }
+
                                     card.data('price_total', price[0] * quantity);
                                     let price_info = priceToString(price[0] * quantity - price[1], true) + g_StatusSeparator + 
                                                         price[2] + (card.data('old_orderdata') ? card.data('old_orderdata') : '');
@@ -351,8 +362,14 @@ function updatePrices() {
                                     document.getElementById('bb_placeorders').style.visibility = 'visible';
                                 }
 
-
                                 $('#bb_totalprice').text(priceToString(total, true));
+
+                                let new_total = parseInt(total, 10) / 100;
+                                let sign = new_total > old_total ? '+' : '-';
+                                let color = new_total > old_total ? 'FireBrick' : 'LimeGreen';
+                                $('#bb_old_totalprice').text('(' + sign + priceToString(Math.abs(new_total-old_total)) + ')');
+                                $('#bb_old_totalprice').css('color', color);
+                                
                                 $('#bb_historyrange').css('visibility', this.checked ? 'hidden' : 'visible');
                             });
 
@@ -529,7 +546,7 @@ function getOptimumPrice(histogram, history, quantity) {
 
     if (histogram) {
         if (histogram.highest_buy_order) {
-            return [parseInt(histogram.highest_buy_order, 10) + 1, 0, 'Highest buy order'];
+            return [parseInt(histogram.highest_buy_order, 10), 0, 'Highest buy order'];
         }
         if (histogram.lowest_sell_order) {
             return [parseInt(histogram.lowest_sell_order, 10), 0, 'Lowest sell order'];
@@ -565,15 +582,19 @@ function getImmediatePrice(histogram, history, quantity) {
 
 function _oldOrderData(html, country_code) {
     let orderData = html.match(/<span class="market_listing_inline_buyorder_qty">(\d+) @<\/span>\s*(?:[^\d,.]*)([\d,.]+)(?:[^\d,.]*)\s*<\/span>/);
-    let quantity = orderData[1];
-    let price = orderData[2];
+    let quantity = 0;
+    let price = 0;
+    let total = 0;
+
+    quantity = orderData[1];
+    price = orderData[2];
     if (country_code === 'VN') {
         price = price.replace('.', '').replace(',', '.');
     }
     else {
         price = price.replace(',', '');
     }
-    let total = Number(quantity * parseFloat(price));
+    total = Number(quantity * parseFloat(price));
     return [quantity, price, total];
 }
 
