@@ -2,15 +2,12 @@
 // @name            Steam Trading Cards Bulk Buyer (Enhanced)
 // @version         1.1.4
 // @description     A free userscript to purchase remaining cards needed for a maximum level badge in bulk
-// @author          HoangVN
 //
 // @copyright       Contains parts of the Steam Trading Cards Bulk Buyer script © 2013 - 2015 Dr. McKay
 // @copyright       Contains parts of the Steam-TradingCardsBulkBuyerMAX script © 2018 Zhiletka
-// @copyright       2025 HoangVN
 // @license         MIT
 //
 // @icon            https://icons.iconarchive.com/icons/papirus-team/papirus-apps/48/steam-icon.png
-// @namespace       https://steamcommunity.com/id/hoangvn93
 //
 // @match           *://steamcommunity.com/*/gamecards/*
 // @require         https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js
