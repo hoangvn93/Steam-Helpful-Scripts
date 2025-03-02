@@ -10,7 +10,8 @@
 // @icon            https://icons.iconarchive.com/icons/papirus-team/papirus-apps/48/steam-icon.png
 //
 // @match           *://steamcommunity.com/*/gamecards/*
-// @require         https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js
+// @require         https://code.jquery.com/jquery-3.7.1.min.js
+// @require         https://code.jquery.com/jquery-migrate-3.5.2.min.js
 // @grant           GM_info
 // ==/UserScript==
 
@@ -20,6 +21,11 @@ $.ajaxSetup({
         withCredentials: true
     }
 });
+
+// @todo: Remove this when jQuery Migrate is no longer needed
+// Bump to jQuery 3.7.1
+// No time to fix the issues right now
+$.migrateEnablePatches( "self-closed-tags" );
 
 var g_Now = Date.now();
 var g_StatusSeparator = " - ";
