@@ -47,6 +47,8 @@ var g_HistoryRangeDays = 7;
 var g_BadgeLevel = 0;
 var g_BadgeMaxLevel = 5;
 var g_IsSaleBadge = false;
+var g_ShowedBadgeLevel = 0;
+var g_IsFoil = false;
 
 // Messages
 var g_Messages = {
@@ -59,7 +61,7 @@ var g_Messages = {
     status_placing_order: 'Placing buy order...',
     status_loading: 'Loading...',
     status_purchased: 'Purchased',
-    status_placed: 'Placed buy order',
+    status_placed: 'Order placed',
     status_checking: 'Checking order status...',
     status_canceling: 'Canceling active order...',
 };
@@ -69,6 +71,13 @@ var g_Messages = {
 var g_SaleBagdeIds = [
     2861720, /* Winter Sale 2024 */              
 ]
+
+// Colors
+var g_Colors = {
+    green: 'LimeGreen',
+    red: 'FireBrick',
+    gold: 'Gold'
+}
 
 // UI settings
 var TITLE = '<div class="badge_title_rule"/><div class="badge_title">' + g_Name + '</div><br/>';
@@ -91,7 +100,9 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
     // Set max level to 1 for a Foil badge
     if (document.documentURI.includes('border=1')) {
         g_BadgeMaxLevel = 1;
+        g_IsFoil = true;
     }
+
     // Detect Steam Sale badge
     let appId = document.documentURI.match(/gamecards\/(\d+)/)[1];
     if($('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Badge\s*/) || 
@@ -103,6 +114,7 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
 
     $('.badge_detail_tasks:first').append('<div style="margin: 10px"><div id="bb_panel" style="visibility: hidden; margin-top: 5px"/></div>');
     PANEL = $('#bb_panel');
+    g_ShowedBadgeLevel = g_BadgeMaxLevel;
     updatePrices();
 
     // We have to do this visibility/display thing in order for offsetWidth to work
@@ -125,16 +137,17 @@ function _bottomLayout(w) {
     return _total_label + _buy_now + _history_slider + _place_orders;
 }
 
-function _chooseNextLevel(level) {
-    return '<div class="gamecards_inventorylink">' + '<span class="bb_next_lvl" style="padding-right: 10px; font-size: 18px;">' +
-            'Your next level</span><input id="bb_cardsalebox" type="number" min="1" value=' + level + 
-            ' style="padding-left: 10px; width: 60px; height: 20px; font-size: 18px; width: 6ch;"></div></br>'
+function _chooseMaxLevel(level) {
+    g_ShowedBadgeLevel = level;
+    return '<div class="bb_next_lvl" style="margin-bottom: 5px;">' + 
+           '<span style="padding-right: 10px; font-size: 18px;">Your max level</span>' +
+           '<input id="bb_lvl_box" type="number" min="1" value=' + level + 
+           ' style="padding-left: 10px; width: 60px; height: 20px; font-size: 18px; width: 6ch;"></div></br>';
 }
 
 function updatePrices() {
     PANEL.html('');
 
-    var old_total = 0;
     Array.prototype.slice.call($('.badge_card_set_card')).forEach(function(card) {
         card = $(card);
 
@@ -146,14 +159,14 @@ function updatePrices() {
         } else {
             quantity = 0;
         }
-        quantity = (g_BadgeMaxLevel - g_BadgeLevel) - quantity;
+        quantity = (g_ShowedBadgeLevel - g_BadgeLevel) - quantity;
         if (quantity < 1) {
             return;
         }
 
         if (PANEL.html().length == 0) {
             PANEL.append(TITLE);
-            PANEL.append(_chooseNextLevel(g_BadgeMaxLevel));
+            PANEL.append(_chooseMaxLevel(g_ShowedBadgeLevel));
         }
 
         var cardName = cardText.replace(/\t|\r?\n|\r/g, '');
@@ -164,15 +177,18 @@ function updatePrices() {
                 cardName + ' (' + quantity + ')</span></label><span class="bb_cardprice" data-name="' + cardName.replace(/"/g, '&quot;') + '"/></div>');
 
         PANEL.append(row);
-
         row.data('quantity', quantity);
-
         setCardStatus(row, g_Messages.status_loading);
 
         var appID = document.documentURI.match(/gamecards\/(\d+)/);
         var cardPageUrl = 'https://steamcommunity.com/market/listings/753/' + appID[1] + '-' + encodeURIComponent(cardName);
-
-        cardPageAjaxRequest(g_BadgeMaxLevel > 1 ? [cardPageUrl + ' (Trading Card)', cardPageUrl] : [cardPageUrl + ' (Foil Trading Card)', cardPageUrl + ' (Foil)']);
+        
+        if(g_IsFoil) {
+            cardPageAjaxRequest([cardPageUrl + ' (Foil Trading Card)', cardPageUrl + ' (Foil)']);
+        }
+        else {
+            cardPageAjaxRequest([cardPageUrl + ' (Trading Card)', cardPageUrl]);
+        }
 
         function cardPageAjaxRequest(urls) {
             if (urls.length == 0) {
@@ -246,8 +262,7 @@ function updatePrices() {
                             let oldOrderData = _oldOrderData(html, countryCode[1]);
                             row.data('old_orderid', oldOrderID[1]);
                             row.data('old_orderdata', ' <span style="opacity: 0.5"><strike>' + 
-                                oldOrderData[0] + ' x ' + oldOrderData[1] + ' (' + priceToString(oldOrderData[2]) + ') order</strike></span>');
-                            old_total += oldOrderData[2];
+                                oldOrderData[0] + ' x ' + oldOrderData[1] + ' (' + priceToString(oldOrderData[2]) + ') ordered</strike></span>');
                             row.data('old_price', oldOrderData[1]);
                         }
 
@@ -286,25 +301,27 @@ function updatePrices() {
                                 $('#bb_historyrange').css('display', 'none');
                             }
 
-                            $('#bb_cardsalebox').change(function() {
-                                let level = document.getElementById("bb_cardsalebox").value;
+                            $('#bb_lvl_box').change(function() {
+                                let level = document.getElementById("bb_lvl_box").value;
                                 if (g_IsSaleBadge) {
-                                    if(level < g_BadgeMaxLevel) {
-                                        document.getElementById("bb_cardsalebox").value = g_BadgeMaxLevel;
+                                    if(level <= g_BadgeMaxLevel) {
+                                        document.getElementById("bb_lvl_box").value = g_BadgeMaxLevel;
                                         return;
                                     }
+                                    g_BadgeMaxLevel = level;
                                 } else {
                                     if(level < (g_BadgeLevel + 1) || level > g_BadgeMaxLevel) {
-                                        document.getElementById("bb_cardsalebox").value = g_BadgeMaxLevel;
+                                        document.getElementById("bb_lvl_box").value = g_BadgeMaxLevel;
                                         return;
                                     }                                    
                                 }
-                                g_BadgeMaxLevel = level;
+                                g_ShowedBadgeLevel = level;
                                 updatePrices();
                             });
 
                             $('#bb_changemode').change(function() {
                                 var total = 0;
+                                var old_total = 0;
                                 var fail_count = 0;
                                 var skip_count = 0;
                                 var card_num = 0;
@@ -345,13 +362,24 @@ function updatePrices() {
                                     let price_info = priceToString(price[0] * quantity - price[1], true) + g_StatusSeparator + 
                                                         price[2] + (card.data('old_orderdata') ? card.data('old_orderdata') : '');
                                     setCardStatus(card, price_info);
+                                    let new_price = price[0] * quantity - price[1];
+                                    let old_price = Number(card.data('old_price')) * quantity;
+                                    if(old_price === parseInt(new_price, 10) / 100) {
+                                        card.find('.bb_cardcheckbox').prop({checked: false});
+                                    } else {
+                                        card.find('.bb_cardcheckbox').prop({checked: true});
+                                    }
+
                                     if (card.find('.bb_cardcheckbox').is(':checked')) {
-                                        total += price[0] * quantity - price[1];
+                                        total += new_price;
+                                        old_total += old_price;
                                         card.removeClass('skip');
                                         card.css('opacity', 1);
                                     } else {
-                                        card.addClass('skip');
-                                        card.css('opacity', 0.4);
+                                        if (!card.hasClass('skip')) {
+                                            card.addClass('skip');
+                                            card.css('opacity', 0.4);
+                                        }
                                     }
                                 }
 
@@ -365,8 +393,8 @@ function updatePrices() {
                                 $('#bb_totalprice').text(priceToString(total, true));
 
                                 let new_total = parseInt(total, 10) / 100;
-                                let sign = new_total > old_total ? '+' : '-';
-                                let color = new_total > old_total ? 'FireBrick' : 'LimeGreen';
+                                let sign = new_total >= old_total ? '+' : '-';
+                                let color = new_total > old_total ? g_Colors.red : g_Colors.green;
                                 $('#bb_old_totalprice').text('(' + sign + priceToString(Math.abs(new_total-old_total)) + ')');
                                 $('#bb_old_totalprice').css('color', color);
                                 
@@ -494,7 +522,7 @@ function setCardStatus(card, status) {
 function setCardStatusError(card, status, remove_class) {
     setCardStatus(card, status);
     card.find('.bb_cardcheckbox').prop({checked: false, disabled: true});
-    card.css({color: 'FireBrick', opacity: 0.8});
+    card.css({color: g_Colors.red, opacity: 0.8});
     if (remove_class) {
         card.removeClass();
     }
@@ -504,12 +532,12 @@ function setCardStatusError(card, status, remove_class) {
 
 function setCardStatusSuccess(card, status) {
     setCardStatus(card, status);
-    card.css('color', 'LimeGreen');
+    card.css('color', g_Colors.green);
 }
 
 function setCardStatusInProgress(card, status) {
     setCardStatus(card, status);
-    card.css('color', 'Gold');
+    card.css('color', g_Colors.gold);
 }
 
 function priceToString(price, cents) {
