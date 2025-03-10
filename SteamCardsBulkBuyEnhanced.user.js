@@ -91,7 +91,9 @@ if ($('.badge_card_set_card').length && $('.badge_info').length) {
 
     // Detect Steam Sale badge
     let appId = document.documentURI.match(/gamecards\/(\d+)/)[1];
-    if(SteamBulkBuyer.badge.saleIds.includes(parseInt(appId))) {
+    if(SteamBulkBuyer.badge.saleIds.includes(parseInt(appId)) || 
+        $('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Badge\s*/) ||
+        $('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Foil Badge\s*/)) {
         SteamBulkBuyer.badge.maxLevel = SteamBulkBuyer.badge.level + 1;
         SteamBulkBuyer.badge.isSale = true;
     }
