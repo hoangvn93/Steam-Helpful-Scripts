@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            Steam Trading Cards Bulk Buyer (Enhanced)
-// @version         1.1.5
-// @description     A free userscript to purchase remaining cards needed for a maximum level badge in bulk
+// @version         1.1.6
+// @description     A free userscript to purchase remaining cards needed for a desired level badge in bulk
 //
 // @copyright       2025 HoangVN
 // @copyright       Contains parts of the Steam-TradingCardsBulkBuyerMAX script © 2018 Zhiletka
@@ -27,18 +27,21 @@ const SteamBulkBuyer = {
     statusSeparator: " - ",
     sessionID: null,
     name: GM_info.script.name + " - v" + GM_info.script.version,
-    currency: 1,
-    currencyInfo: {
-        symbol_prefix: "",
-        symbol_suffix: "",
+    currency: {
+        id: 1,
+        prefix: "",
+        suffix: "",
         separator: "."
     },
     historyRangeDays: 7,
-    badgeLevel: 0,
-    badgeMaxLevel: 5,
-    isSaleBadge: false,
-    showedBadgeLevel: 0,
-    isFoil: false,
+    badge: {
+        level: 0,
+        maxLevel: 5,
+        showedLevel: 0,
+        isFoil: false,
+        isSale: false,
+        saleIds: [2861720] // Winter Sale 2024
+    },
     messages: {
         error: {
             cannot_buy: 'Cannot buy now (No sellers or card has expired)',
@@ -46,7 +49,8 @@ const SteamBulkBuyer = {
             not_logged_in: 'Not logged in',
             get_histogram: 'Failed to get item orders histogram',
             get_price_history: 'Failed to get item price history',
-            get_buy_order_status: 'Cannot get buy order status'
+            get_buy_order_status: 'Cannot get buy order status',
+            no_available: 'No longer available',
         },
         status: {
             placing_order: 'Placing buy order...',
@@ -57,13 +61,11 @@ const SteamBulkBuyer = {
             canceling: 'Canceling active order...'
         }
     },
-    saleBadgeIds: [2861720], // Winter Sale 2024
     colors: {
         green: 'LimeGreen',
         red: 'FireBrick',
         gold: 'Gold'
     },
-    title: '<div class="badge_title_rule"/><div class="badge_title">' + GM_info.script.name + " - v" + GM_info.script.version + '</div><br/>',
     panel: null
 };
 
@@ -78,27 +80,25 @@ $(document).ready(function() {
 if ($('.badge_card_set_card').length && $('.badge_info').length) {
     // Get current badge level
     if ($('.badge_info_unlocked').length) {
-        SteamBulkBuyer.badgeLevel = parseInt($('meta[property="og:description"]').attr('content').match(/\d+/), 10);
+        SteamBulkBuyer.badge.level = parseInt($('meta[property="og:description"]').attr('content').match(/\d+/), 10);
     }
 
     // Set max level to 1 for a Foil badge
     if (document.documentURI.includes('border=1')) {
-        SteamBulkBuyer.badgeMaxLevel = 1;
-        SteamBulkBuyer.isFoil = true;
+        SteamBulkBuyer.badge.maxLevel = 1;
+        SteamBulkBuyer.badge.isFoil = true;
     }
 
     // Detect Steam Sale badge
     let appId = document.documentURI.match(/gamecards\/(\d+)/)[1];
-    if($('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Badge\s*/) ||
-            $('.badge_title').text().match(/\s*(Winter|Summer) Sale \d+ Foil Badge\s*/) ||
-            SteamBulkBuyer.saleBadgeIds.includes(parseInt(appId))) {
-            SteamBulkBuyer.badgeMaxLevel = SteamBulkBuyer.badgeLevel + 1;
-            SteamBulkBuyer.isSaleBadge = true;
+    if(SteamBulkBuyer.badge.saleIds.includes(parseInt(appId))) {
+        SteamBulkBuyer.badge.maxLevel = SteamBulkBuyer.badge.level + 1;
+        SteamBulkBuyer.badge.isSale = true;
     }
 
     $('.badge_detail_tasks:first').append('<div style="margin: 10px"><div id="bb_panel" style="visibility: hidden; margin-top: 5px"/></div>');
     SteamBulkBuyer.panel = $('#bb_panel');
-    SteamBulkBuyer.showedBadgeLevel = SteamBulkBuyer.badgeMaxLevel;
+    SteamBulkBuyer.badge.showedLevel = SteamBulkBuyer.badge.maxLevel;
     updatePrices();
 
     // We have to do this visibility/display thing in order for offsetWidth to work
@@ -122,9 +122,9 @@ function _bottomLayout(w) {
 }
 
 function _chooseMaxLevel(level) {
-    SteamBulkBuyer.showedBadgeLevel = level;
+    SteamBulkBuyer.badge.showedLevel = level;
     return '<div class="bb_next_lvl" style="margin-bottom: 5px;">' +
-           '<span style="padding-right: 10px; font-size: 18px;">Your max level</span>' +
+           '<span style="padding-right: 10px; font-size: 18px">Your max level</span>' +
            '<input id="bb_lvl_box" type="number" min="1" value=' + level +
            ' style="padding-left: 10px; width: 60px; height: 20px; font-size: 18px; width: 6ch;"></div></br>';
 }
@@ -139,7 +139,7 @@ function updatePrices() {
         let cardText = card.find('.badge_card_set_text')[0].textContent;
         let quantity = cardText.match(/\((\d+)\)\r?\n|\r/);
         quantity = quantity ? parseInt(quantity[1], 10) : 0;
-        quantity = (SteamBulkBuyer.showedBadgeLevel - SteamBulkBuyer.badgeLevel) - quantity;
+        quantity = (SteamBulkBuyer.badge.showedLevel - SteamBulkBuyer.badge.level) - quantity;
         if (quantity < 1) return;
 
         let cardName = cardText.substring(cardText.indexOf(')') + 1).replace(/\t|\r?\n|\r/g, '');
@@ -147,8 +147,9 @@ function updatePrices() {
     });
 
     if (cardData.length > 0) {
-        SteamBulkBuyer.panel.append(SteamBulkBuyer.title);
-        SteamBulkBuyer.panel.append(_chooseMaxLevel(SteamBulkBuyer.showedBadgeLevel));
+        let title = '<div class="badge_title_rule"/><div class="badge_title">' + GM_info.script.name + " - v" + GM_info.script.version + '</div><br/>';
+        SteamBulkBuyer.panel.append(title);
+        SteamBulkBuyer.panel.append(_chooseMaxLevel(SteamBulkBuyer.badge.showedLevel));
     }
 
     cardData.forEach(function(data) {
@@ -164,11 +165,7 @@ function updatePrices() {
         let appID = document.documentURI.match(/gamecards\/(\d+)/);
         let cardPageUrl = 'https://steamcommunity.com/market/listings/753/' + appID[1] + '-' + encodeURIComponent(data.cardName);
 
-        if (SteamBulkBuyer.isFoil) {
-            cardPageAjaxRequest([cardPageUrl + ' (Foil Trading Card)', cardPageUrl + ' (Foil)']);
-        } else {
-            cardPageAjaxRequest([cardPageUrl + ' (Trading Card)', cardPageUrl]);
-        }
+        cardPageAjaxRequest(SteamBulkBuyer.isFoil ? [cardPageUrl + ' (Foil Trading Card)', cardPageUrl + ' (Foil)'] : [cardPageUrl + ' (Trading Card)', cardPageUrl]);
 
         function cardPageAjaxRequest(urls) {
             if (urls.length == 0) {
@@ -184,6 +181,12 @@ function updatePrices() {
                 var hashName = html.match(/"market_hash_name":"((?:[^"\\]|\\.)*)"/);
                 var oldOrderID = html.match(/CancelMarketBuyOrder\(\D*(\d+)\D*\)/);
 
+                let no_available = html.match(/This item can no longer be bought or sold on the Community Market./);
+                if (no_available) {
+                    setCardStatusError(row, SteamBulkBuyer.messages.error.no_available, true);
+                    return;
+                }
+
                 if (!currency || !countryCode) {
                     setCardStatusError(row, SteamBulkBuyer.messages.error.not_logged_in);
                     return;
@@ -194,12 +197,12 @@ function updatePrices() {
                     return cardPageAjaxRequest(urls);
                 }
 
-                SteamBulkBuyer.currency = currency[1];
+                SteamBulkBuyer.currency.id = currency[1];
                 SteamBulkBuyer.sessionID = sessionID[1];
 
                 hashName[1] = decodeURIComponent(JSON.parse('"' + hashName[1] + '"'));
                 $.get('/market/itemordershistogram',
-                    {"country": countryCode[1], language: 'english', "currency": SteamBulkBuyer.currency, "item_nameid": marketID[1]}).always(function(histogram) {
+                    {"country": countryCode[1], language: 'english', "currency": SteamBulkBuyer.currency.id, "item_nameid": marketID[1]}).always(function(histogram) {
 
                     if (!histogram || !histogram.success) {
                         setCardStatusError(row, SteamBulkBuyer.messages.error.get_histogram);
@@ -207,9 +210,9 @@ function updatePrices() {
                     }
 
                     if (histogram.price_prefix) {
-                        SteamBulkBuyer.currencyInfo.symbol_prefix = histogram.price_prefix;
+                        SteamBulkBuyer.currency.prefix = histogram.price_prefix;
                     } else {
-                        SteamBulkBuyer.currencyInfo.symbol_suffix = histogram.price_suffix;
+                        SteamBulkBuyer.currency.suffix = histogram.price_suffix;
                     }
 
                     [[histogram.buy_order_graph, histogram.highest_buy_order, histogram.buy_order_summary],
@@ -284,19 +287,19 @@ function updatePrices() {
 
                             $('#bb_lvl_box').change(function() {
                                 let level = document.getElementById("bb_lvl_box").value;
-                                if (SteamBulkBuyer.isSaleBadge) {
-                                    if(level <= SteamBulkBuyer.badgeMaxLevel) {
-                                        document.getElementById("bb_lvl_box").value = SteamBulkBuyer.badgeMaxLevel;
+                                if (SteamBulkBuyer.isSale) {
+                                    if(level <= SteamBulkBuyer.badge.level) {
+                                        document.getElementById("bb_lvl_box").value = SteamBulkBuyer.badge.maxLevel;
                                         return;
                                     }
-                                    SteamBulkBuyer.badgeMaxLevel = level;
+                                    SteamBulkBuyer.badge.maxLevel = level;
                                 } else {
-                                    if(level < (SteamBulkBuyer.badgeLevel + 1) || level > SteamBulkBuyer.badgeMaxLevel) {
-                                        document.getElementById("bb_lvl_box").value = SteamBulkBuyer.badgeMaxLevel;
+                                    if(level < (SteamBulkBuyer.badge.level + 1) || level > SteamBulkBuyer.badge.maxLevel) {
+                                        document.getElementById("bb_lvl_box").value = SteamBulkBuyer.badge.maxLevel;
                                         return;
                                     }
                                 }
-                                SteamBulkBuyer.showedBadgeLevel = level;
+                                SteamBulkBuyer.badge.showedLevel = level;
                                 updatePrices();
                             });
 
@@ -433,7 +436,7 @@ function placeBuyOrder() {
 
         $.post('https://steamcommunity.com/market/createbuyorder/', {
             "sessionid": SteamBulkBuyer.sessionID,
-            "currency": SteamBulkBuyer.currency,
+            "currency": SteamBulkBuyer.currency.id,
             "appid": 753,
             "market_hash_name": card.data('hashname'),
             "price_total": card.data('price_total'),
@@ -530,9 +533,9 @@ const _showProgress = (done, total) => ((done/total).toFixed(2) * 100) + "%";
 
 function priceToString(price, cents) {
     if (cents) price = parseInt(price, 10) / 100;
-    return SteamBulkBuyer.currencyInfo.symbol_prefix + 
-           price.toFixed(2).replace(".", SteamBulkBuyer.currencyInfo.separator) + 
-           SteamBulkBuyer.currencyInfo.symbol_suffix;
+    return SteamBulkBuyer.currency.prefix + 
+           price.toFixed(2).replace(".", SteamBulkBuyer.currency.separator) + 
+           SteamBulkBuyer.currency.suffix;
 }
 
 function getOptimumPrice(histogram, history, quantity) {
